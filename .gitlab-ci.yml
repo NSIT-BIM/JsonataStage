@@ -1,0 +1,48 @@
+variables:
+  MAVEN_OPTS: "-Dhttps.protocols=TLSv1.2 -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"
+  MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
+
+image: maven:3.3.9-jdk-8
+
+cache:
+  paths:
+    - .m2/repository
+
+
+build:
+  stage: build
+  script:
+    - cp lib/ccjava-api.jar $CI_PROJECT_DIR/.m2/repository/
+    - mvn package
+  artifacts:
+    paths: ['target/jsonata-${CI_COMMIT_TAG}.jar']
+    expire_in: 1 hour
+  only:
+    - tags
+    
+
+upload:
+  dependencies:
+    - build
+  image: curlimages/curl:latest
+  stage: deploy
+  script:
+    - 'curl --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "target/jsonata-${CI_COMMIT_TAG}.jar" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jsonata/${CI_COMMIT_TAG}/jsonata-${CI_COMMIT_TAG}.jar"'
+  only:
+    - tags
+
+
+
+release_job:
+  stage: deploy
+  dependencies:
+    - build
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG    
+  script:
+    - env
+    - echo 'running release_job'
+    - 'release-cli create --name "Release $CI_COMMIT_TAG" --tag-name $CI_COMMIT_TAG --description "$CI_COMMIT_TAG: $CI_COMMIT_TITLE $CI_COMMIT_DESCRIPTION" --assets-link "{\"name\":\"jsonata ${CI_COMMIT_TAG}\",\"url\":\"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jsonata/${CI_COMMIT_TAG}/jsonata-${CI_COMMIT_TAG}.jar\"}"'
+        
+
