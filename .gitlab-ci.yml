@@ -12,6 +12,7 @@ cache:
 build:
   stage: build
   script:
+    - mkdir -p $CI_PROJECT_DIR/.m2/repository
     - cp lib/ccjava-api.jar $CI_PROJECT_DIR/.m2/repository/
     - mvn package
   artifacts:
