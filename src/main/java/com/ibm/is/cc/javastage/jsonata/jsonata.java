@@ -1,9 +1,9 @@
-package com.ibm.is.cc.javastage.jsonata;
+package main.java.com.ibm.is.cc.javastage.jsonata;
 
 
 import java.io.IOException;
 
-import com.api.jsonata4java.expressions.EvaluateException;
+//import com.api.jsonata4java.expressions.EvaluateException;
 import com.api.jsonata4java.expressions.EvaluateRuntimeException;
 import com.api.jsonata4java.expressions.Expressions;
 import com.api.jsonata4java.expressions.ParseException;
@@ -11,12 +11,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.security.MessageDigest;
+// import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
-import java.math.BigInteger;
+// import java.math.BigInteger;
 
 import com.ibm.is.cc.javastage.api.Capabilities;
 import com.ibm.is.cc.javastage.api.ColumnMetadata;
