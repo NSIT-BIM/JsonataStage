@@ -8,6 +8,18 @@ cache:
   paths:
     - .m2/repository
 
+build test:
+  stage: build
+  variables:
+    CI_COMMIT_TAG: test
+  script:
+    - mkdir -p $CI_PROJECT_DIR/.m2/repository
+    - cp lib/ccjava-api.jar $CI_PROJECT_DIR/.m2/repository/
+    - mvn package
+  artifacts:
+    paths: ['target/jsonata-${CI_COMMIT_TAG}.jar']
+    expire_in: 1 hour
+  when: manual
 
 build:
   stage: build
