@@ -10,12 +10,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.security.MessageDigest;
+//import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
-import java.math.BigInteger;
+//import java.math.BigInteger;
 
 import com.ibm.is.cc.javastage.api.Capabilities;
 import com.ibm.is.cc.javastage.api.ColumnMetadata;
@@ -37,7 +37,7 @@ public class jsonata extends Processor {
   private OutputLink m_rejectLink;
   private String jsondata;
   private String outputField;
-  private String query;
+  String query;
   private Boolean serialize;
   private Boolean expand;
   private Expressions expr;
@@ -82,13 +82,13 @@ public class jsonata extends Processor {
     jsondata = userStageProperties.getProperty("jsondata");
     outputField = userStageProperties.getProperty("output");
     query = userStageProperties.getProperty("query");
-    if (userStageProperties.getProperty("serialize").toUpperCase().equals("TRUE")) {
+    if (userStageProperties.getProperty("serialize").equalsIgnoreCase("TRUE")) {
       serialize = true;
     } else {
       serialize = false;
     }
 
-    if (userStageProperties.getProperty("expand").toUpperCase().equals("TRUE")) {
+    if (userStageProperties.getProperty("expand").equalsIgnoreCase("TRUE")) {
 
       expand = true;
     } else {
