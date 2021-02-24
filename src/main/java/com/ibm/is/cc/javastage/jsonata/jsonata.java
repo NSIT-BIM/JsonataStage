@@ -37,7 +37,6 @@ public class jsonata extends Processor {
   private OutputLink m_rejectLink;
   private String jsondata;
   private String outputField;
-  String query;
   private Boolean serialize;
   private Boolean expand;
   private Expressions expr;
@@ -81,7 +80,7 @@ public class jsonata extends Processor {
     Properties userStageProperties = configuration.getUserProperties();
     jsondata = userStageProperties.getProperty("jsondata");
     outputField = userStageProperties.getProperty("output");
-    query = userStageProperties.getProperty("query");
+    String query = userStageProperties.getProperty("query");
     if (userStageProperties.getProperty("serialize").equalsIgnoreCase("TRUE")) {
       serialize = true;
     } else {
