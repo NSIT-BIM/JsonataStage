@@ -38,6 +38,7 @@ public class jsonata extends Processor {
   private String jsondata;
   private String outputField;
   private Boolean serialize;
+  private String mode;
   private Boolean expand;
   private Expressions expr;
 
@@ -65,11 +66,12 @@ public class jsonata extends Processor {
   public List < PropertyDefinition > getUserPropertyDefinitions() {
     List < PropertyDefinition > propList = new ArrayList < PropertyDefinition > ();
 
-    propList.add(new PropertyDefinition("jsondata", "", "jsondata", "jsondata", PropertyDefinition.Scope.STAGE));
-    propList.add(new PropertyDefinition("query", "$", "query", "query", PropertyDefinition.Scope.STAGE));
-    propList.add(new PropertyDefinition("output", "", "output field", "output field", PropertyDefinition.Scope.STAGE));
-    propList.add(new PropertyDefinition("serialize", "false", "serialize", "serialize", PropertyDefinition.Scope.STAGE));
-    propList.add(new PropertyDefinition("expand", "false", "expand", "expand", PropertyDefinition.Scope.STAGE));
+    propList.add(new PropertyDefinition("jsondata", "", "jsondata", "Input field with json data", PropertyDefinition.Scope.STAGE));
+    propList.add(new PropertyDefinition("query", "$", "query", "Jsonata expression", PropertyDefinition.Scope.STAGE));
+    propList.add(new PropertyDefinition("output", "", "output field", "Output field to populate with result set", PropertyDefinition.Scope.STAGE));
+    propList.add(new PropertyDefinition("serialize", "false", "serialize", "Serialize objet", PropertyDefinition.Scope.STAGE));
+    propList.add(new PropertyDefinition("expand", "false", "expand", "Expand arrays to records", PropertyDefinition.Scope.STAGE));
+    propList.add(new PropertyDefinition("mode", "drop", "mode", "Drop/Warn/Reject when result set is empty", PropertyDefinition.Scope.STAGE));
     return propList;
   }
 
@@ -81,30 +83,44 @@ public class jsonata extends Processor {
     jsondata = userStageProperties.getProperty("jsondata");
     outputField = userStageProperties.getProperty("output");
     String query = userStageProperties.getProperty("query");
+    
     if (userStageProperties.getProperty("serialize").equalsIgnoreCase("TRUE")) {
       serialize = true;
     } else {
       serialize = false;
     }
-
     if (userStageProperties.getProperty("expand").equalsIgnoreCase("TRUE")) {
-
       expand = true;
     } else {
       expand = false;
+    }
+    if (userStageProperties.getProperty("mode").equalsIgnoreCase("DROP")) {
+        mode = "drop";
+      } else if (userStageProperties.getProperty("mode").equalsIgnoreCase("REJECT")) {
+        mode = "reject";
+      }
+      else {
+        mode = "warn";
+      }
+    if (m_rejectLink == null && mode.equals("reject") ) {
+    	Logger.warning("Mode set to reject but no reject link, records could be silently dropped. Set mode to drop/warn or add reject link");
     }
     Logger.information("parsing query");
     expr = null;
     try {
       expr = Expressions.parse(query);
     } catch(ParseException e) {
-      Logger.warning("error parsing");
+      Logger.fatal("Parsing error 1 for query "+query);
+      terminate(true);
     } catch(EvaluateRuntimeException ere) {
-      Logger.warning("error parsing");
+      Logger.fatal("Parsing error 2 for query "+query);
+      terminate(true);
     } catch(JsonProcessingException e) {
-      Logger.warning("error parsing");
+      Logger.fatal("Parsing error 3 for query "+query);
+      terminate(true);
     } catch(IOException e) {
-      Logger.warning("error parsing");
+      Logger.fatal("Parsing error 4 for query "+query);
+      terminate(true);
     }
     Logger.information("query " + expr);
 
@@ -157,7 +173,7 @@ public class jsonata extends Processor {
         validJson = false;
 
       }
-
+      if (validJson) {
       try {
         Logger.information("evaluating");
         result = expr.evaluate(jsonObj);
@@ -166,10 +182,17 @@ public class jsonata extends Processor {
       }
       Logger.information("evaluation done");
       if (result == null) {
+    	if (mode.equals("warn")) {
         Logger.warning("no match");
-
       }
-      else if (validJson) {
+      else if (mode.equals("reject") && m_rejectLink != null){
+    	  RejectRecord rejRecord = m_rejectLink.getRejectRecord(inputRecord);
+          rejRecord.setErrorText("No match");
+          rejRecord.setErrorCode(2);
+          m_rejectLink.writeRecord(rejRecord);
+      }
+      }
+      else  {
 
         if (expand && result.isArray()) {
           for (int i = 0; i < result.size(); i++) {
@@ -258,6 +281,7 @@ public class jsonata extends Processor {
         }
 
       }
+    }
     } while ( true );
   }
 
