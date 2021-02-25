@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+
+
 //import java.math.BigInteger;
 
 import com.ibm.is.cc.javastage.api.Capabilities;
@@ -83,7 +85,7 @@ public class jsonata extends Processor {
     jsondata = userStageProperties.getProperty("jsondata");
     outputField = userStageProperties.getProperty("output");
     String query = userStageProperties.getProperty("query");
-    
+
     if (userStageProperties.getProperty("serialize").equalsIgnoreCase("TRUE")) {
       serialize = true;
     } else {
@@ -95,31 +97,31 @@ public class jsonata extends Processor {
       expand = false;
     }
     if (userStageProperties.getProperty("mode").equalsIgnoreCase("DROP")) {
-        mode = "drop";
-      } else if (userStageProperties.getProperty("mode").equalsIgnoreCase("REJECT")) {
-        mode = "reject";
-      }
-      else {
-        mode = "warn";
-      }
-    if (m_rejectLink == null && mode.equals("reject") ) {
-    	Logger.warning("Mode set to reject but no reject link, records could be silently dropped. Set mode to drop/warn or add reject link");
+      mode = "drop";
+    } else if (userStageProperties.getProperty("mode").equalsIgnoreCase("REJECT")) {
+      mode = "reject";
+    }
+    else {
+      mode = "warn";
+    }
+    if (m_rejectLink == null && mode.equals("reject")) {
+      Logger.warning("Mode set to reject but no reject link, records could be silently dropped. Set mode to drop/warn or add reject link");
     }
     Logger.information("parsing query");
     expr = null;
     try {
       expr = Expressions.parse(query);
     } catch(ParseException e) {
-      Logger.fatal("Parsing error 1 for query "+query);
+      Logger.fatal("Parsing error 1 for query " + query);
       terminate(true);
     } catch(EvaluateRuntimeException ere) {
-      Logger.fatal("Parsing error 2 for query "+query);
+      Logger.fatal("Parsing error 2 for query " + query);
       terminate(true);
     } catch(JsonProcessingException e) {
-      Logger.fatal("Parsing error 3 for query "+query);
+      Logger.fatal("Parsing error 3 for query " + query);
       terminate(true);
     } catch(IOException e) {
-      Logger.fatal("Parsing error 4 for query "+query);
+      Logger.fatal("Parsing error 4 for query " + query);
       terminate(true);
     }
     Logger.information("query " + expr);
@@ -174,115 +176,119 @@ public class jsonata extends Processor {
 
       }
       if (validJson) {
-      try {
-        Logger.information("evaluating");
-        result = expr.evaluate(jsonObj);
-      } catch(EvaluateException e) {
-        Logger.warning("error evaluating");
-      }
-      Logger.information("evaluation done");
-      if (result == null) {
-    	if (mode.equals("warn")) {
-        Logger.warning("no match");
-      }
-      else if (mode.equals("reject") && m_rejectLink != null){
-    	  RejectRecord rejRecord = m_rejectLink.getRejectRecord(inputRecord);
-          rejRecord.setErrorText("No match");
-          rejRecord.setErrorCode(2);
-          m_rejectLink.writeRecord(rejRecord);
-      }
-      }
-      else  {
-
-        if (expand && result.isArray()) {
-          for (int i = 0; i < result.size(); i++) {
-            OutputRecord outputRecord = m_outputLink.getOutputRecord();
-            if (serialize && result.get(i).isObject()) {
-              Iterator < String > fieldNames = outColsNames.iterator();
-              while (fieldNames.hasNext()) {
-                String fieldName = fieldNames.next();
-
-                if (result.get(i).get(fieldName) != null) {
-
-                  if (result.get(i).get(fieldName).isObject()) {
-                    try {
-                      outputRecord.setValue(fieldName, mapper.writeValueAsString(result.get(i).get(fieldName)));
-                    }
-                    catch(JsonProcessingException e) {
-                      Logger.warning("error");
-                    }
-                  }
-                  else {
-                    outputRecord.setValue(fieldName, result.get(i).get(fieldName).asText());
-                  }
-
-                }
-                else {
-                  int pos = outColsNames.indexOf(fieldName);
-                  String derivation = outCols.get(pos).getDerivation();
-                  if (derivation != null) {
-                    outputRecord.setValue(fieldName, result.get(i).at(derivation).asText());
-                  }
-                }
-              }
-            }
-            if (result.get(i).isObject()) {
-              try {
-                outputRecord.setValue(outputField, mapper.writeValueAsString(result.get(i)));
-              }
-              catch(JsonProcessingException e) {
-                Logger.warning("error");
-              }
-            }
-            else {
-              outputRecord.setValue(outputField, result.get(i).asText());
-            }
-
-            m_outputLink.writeRecord(outputRecord);
+        try {
+          Logger.information("evaluating");
+          result = expr.evaluate(jsonObj);
+        } catch(EvaluateException e) {
+          Logger.warning("error evaluating");
+        }
+        Logger.information("evaluation done");
+        if (result == null) {
+          if (mode.equals("warn")) {
+            Logger.warning("no match");
           }
-        } else {
-          OutputRecord outputRecord = m_outputLink.getOutputRecord();
-          if (serialize && result.isObject()) {
-            Iterator < String > fieldNames = outColsNames.iterator();
-            while (fieldNames.hasNext()) {
+          else if (mode.equals("reject") && m_rejectLink != null) {
+            RejectRecord rejRecord = m_rejectLink.getRejectRecord(inputRecord);
+            rejRecord.setErrorText("No match");
+            rejRecord.setErrorCode(2);
+            m_rejectLink.writeRecord(rejRecord);
+          }
+        }
+        else {
 
-              String fieldName = fieldNames.next();
-              if (result.get(fieldName) != null) {
+          if (expand && result.isArray()) {
+            for (int i = 0; i < result.size(); i++) {
+              OutputRecord outputRecord = m_outputLink.getOutputRecord();
+              if (serialize && result.get(i).isObject()) {
+                serializeRecord(result.get(i), outCols, outColsNames, outputRecord);
+              }
+              if (result.get(i).isObject()) {
                 try {
-                  outputRecord.setValue(fieldName, mapper.writeValueAsString(result.get(fieldName)));
+                  outputRecord.setValue(outputField, mapper.writeValueAsString(result.get(i)));
                 }
                 catch(JsonProcessingException e) {
                   Logger.warning("error");
                 }
               }
               else {
-                int pos = outColsNames.indexOf(fieldName);
-                String derivation = outCols.get(pos).getDerivation();
-                System.out.println(fieldName + "->" + derivation);
-                if (derivation != null) {
-                  outputRecord.setValue(fieldName, result.at(derivation).asText());
-                }
+                outputRecord.setValue(outputField, result.get(i).asText());
+              }
+
+              m_outputLink.writeRecord(outputRecord);
+            }
+          } else {
+            OutputRecord outputRecord = m_outputLink.getOutputRecord();
+            if (serialize && result.isObject()) {
+              serializeRecord( result, outCols, outColsNames, outputRecord);
+            }
+            if (result.isObject() || result.isArray()) {
+              try {
+                outputRecord.setValue(outputField, mapper.writeValueAsString(result));
+              }
+              catch(JsonProcessingException e) {
+                Logger.warning("error");
               }
             }
-          }
-          if (result.isObject() || result.isArray()) {
-            try {
-              outputRecord.setValue(outputField, mapper.writeValueAsString(result));
+            else {
+              outputRecord.setValue(outputField, result.asText());
             }
-            catch(JsonProcessingException e) {
-              Logger.warning("error");
-            }
-          }
-          else {
-            outputRecord.setValue(outputField, result.asText());
+            m_outputLink.writeRecord(outputRecord);
           }
 
-          m_outputLink.writeRecord(outputRecord);
         }
-
       }
-    }
     } while ( true );
   }
 
+  private void writeData(String fieldName, JsonNode data, OutputRecord outputRecord, ColumnMetadata OutputCol) {
+
+    String TargetType = "" + OutputCol.getType();
+    int TargetLength = OutputCol.getPrecision();
+    String SourceType = "" + data.getNodeType();
+    Logger.information(fieldName+":"+SourceType+"->"+TargetType);
+    if (TargetType.equals("class java.lang.String")) {
+      if (TargetLength > 0 && data.asText().length() > TargetLength) {
+        Logger.warning(fieldName + " data truncation");
+      }
+      outputRecord.setValue(fieldName, data.asText());
+    }
+    else if (TargetType.equals("class java.lang.Long")) {
+      outputRecord.setValue(fieldName, data.asLong());
+    }
+    else if (TargetType.equals("class java.math.BigDecimal")) {
+      outputRecord.setValue(fieldName, data.decimalValue());
+    }
+    else if (TargetType.equals("class java.lang.Float")) {
+      outputRecord.setValue(fieldName, data.floatValue());
+    }
+    else if (TargetType.equals("class java.lang.Double")) {
+      outputRecord.setValue(fieldName, data.doubleValue());
+    }
+    else if (TargetType.equals("class java.sql.Timestamp")) {
+    	Logger.warning("Timestamps are not yet handled");	
+	 }
+    else if (TargetType.equals("class java.sql.Date")) {
+    	Logger.warning("Dates are not yet handled");	
+	}
+    else {
+      outputRecord.setValue(fieldName, data.asText());
+    }
+    //outputRecord.setValue(fieldName, data.asText());
+  }
+
+  private void serializeRecord( JsonNode result, List < ColumnMetadata > outCols, List < String > outColsNames, OutputRecord outputRecord) {
+    Iterator < String > fieldNames = outColsNames.iterator();
+    while (fieldNames.hasNext()) {
+      String fieldName = fieldNames.next();
+      int pos = outColsNames.indexOf(fieldName);
+      ColumnMetadata OutputCol = outCols.get(pos);
+      String derivation = outCols.get(pos).getDerivation();
+      if (derivation != null) {
+        writeData(fieldName, result.at(derivation), outputRecord, OutputCol);
+      }
+      else if (result.get(fieldName) != null) {
+        writeData(fieldName, result.get(fieldName), outputRecord, OutputCol);
+      }
+    }
+  }
 }
