@@ -33,6 +33,7 @@ import com.ibm.is.cc.javastage.api.RejectRecord;
 import com.ibm.is.cc.javastage.api.PropertyDefinition;
 import com.ibm.is.cc.javastage.api.Logger;
 
+
 public class jsonata extends Processor {
   private InputLink m_inputLink;
   private OutputLink m_outputLink;
@@ -43,9 +44,15 @@ public class jsonata extends Processor {
   private String mode;
   private Boolean expand;
   private Expressions expr;
+  private int inputRecords = 0;
+  private int outputRecords = 0;
+  private int rejectRecords = 0;
+  private int dropRecords = 0;
+  private int m_nodeID = -1;  
 
   public jsonata() {
     super();
+    Logger.setComponentID("JSONATA");
   }
 
   public Capabilities getCapabilities() {
@@ -62,6 +69,7 @@ public class jsonata extends Processor {
     capabilities.setMaximumRejectLinkCount(1);
     // Set is Wave Generator to false
     capabilities.setIsWaveGenerator(false);
+    capabilities.setIsRunOnConductor(true); 
     return capabilities;
   }
 
@@ -78,6 +86,8 @@ public class jsonata extends Processor {
   }
 
   public boolean validateConfiguration(Configuration configuration, boolean isRuntime) throws Exception {
+	m_nodeID = configuration.getNodeNumber();      
+	
     m_inputLink = configuration.getInputLink(0);
     m_outputLink = configuration.getOutputLink(0);
     m_rejectLink = m_inputLink.getAssociatedRejectLink();
@@ -85,6 +95,7 @@ public class jsonata extends Processor {
     jsondata = userStageProperties.getProperty("jsondata");
     outputField = userStageProperties.getProperty("output");
     String query = userStageProperties.getProperty("query");
+   
 
     if (userStageProperties.getProperty("serialize").equalsIgnoreCase("TRUE")) {
       serialize = true;
@@ -105,9 +116,9 @@ public class jsonata extends Processor {
       mode = "warn";
     }
     if (m_rejectLink == null && mode.equals("reject")) {
-      Logger.warning("Mode set to reject but no reject link, records could be silently dropped. Set mode to drop/warn or add reject link");
+      Logger.warning(1,"Mode set to reject but no reject link, records could be silently dropped. Set mode to drop/warn or add reject link");
     }
-    Logger.information("parsing query");
+    //Logger.information(1,"Parsing query");
     expr = null;
     try {
       expr = Expressions.parse(query);
@@ -124,10 +135,19 @@ public class jsonata extends Processor {
       Logger.fatal("Parsing error 4 for query " + query);
       terminate(true);
     }
-    Logger.information("query " + expr);
-
+    if (m_nodeID == -1) {
+	    Logger.information(2,"query: " + expr);
+	    Logger.information(3,"input link: "+jsondata);
+	    Logger.information(4,"output link: "+outputField);
+	    Logger.information(5,"expand: "+expand);
+	    Logger.information(6,"serialize: "+serialize);
+	    Logger.information(7,"mode: "+mode);
+	}
     return true;
   }
+  
+
+  
   public List < ColumnMetadata > getAdditionalOutputColumns(Link outputLink, List < Link > inputLinks, Properties stageProperties) {
     List < ColumnMetadata > addtionalColumns = new ArrayList < ColumnMetadata > ();
     ColumnMetadataImpl output = new ColumnMetadataImpl(stageProperties.getProperty("output"), ColumnMetadata.SQL_TYPE_VARCHAR);
@@ -137,61 +157,82 @@ public class jsonata extends Processor {
   }
 
   public void process() throws Exception {
+	 
     ObjectMapper mapper = new ObjectMapper();
     JsonNode jsonObj = null;
     JsonNode result = null;
     boolean validJson = true;
+    
+    List < ColumnMetadata > outCols = m_outputLink.getColumnMetadata();
+    List < String > outColsNames = new ArrayList < String > ();
+
+    for (ColumnMetadata s: outCols) {
+
+      if (s.getName() != outputField) {
+        outColsNames.add(s.getName());
+      }
+    }
+    
+    Logger.information(10,"Processing input data");
     do {
-      Logger.information("processing");
+      Logger.debug(99,"Processing input record");
       InputRecord inputRecord = m_inputLink.readRecord();
       if (inputRecord == null) {
         // No more input
         break;
       }
       String json = (String) inputRecord.getValue(jsondata);
-      List < ColumnMetadata > outCols = m_outputLink.getColumnMetadata();
-      List < String > outColsNames = new ArrayList < String > ();
-
-      for (ColumnMetadata s: outCols) {
-
-        if (s.getName() != outputField) {
-          outColsNames.add(s.getName());
-        }
+      inputRecords++;
+      if (Logger.isDebugEnabled()) {
+      Logger.debug(98,json);
       }
+
 
       try {
         jsonObj = mapper.readTree(json);
       } catch(IOException e1) {
         if (m_rejectLink != null) {
+          if (Logger.isDebugEnabled()) {
+          Logger.debug(97,"record rejected because invalid json");
+          }
           RejectRecord rejRecord = m_rejectLink.getRejectRecord(inputRecord);
           rejRecord.setErrorText("Invalid json data");
           rejRecord.setErrorCode(1);
           m_rejectLink.writeRecord(rejRecord);
+          rejectRecords++;
         }
         else {
-          Logger.warning("Invalid json data, add a reject link to handle without warnings");
-          Logger.debug(json);
+          Logger.warning(4,"Invalid json data, add a reject link to handle without warnings");
+          //Logger.debug(json);
         }
         validJson = false;
 
       }
       if (validJson) {
         try {
-          Logger.information("evaluating");
+          //Logger.information("evaluating");
           result = expr.evaluate(jsonObj);
         } catch(EvaluateException e) {
-          Logger.warning("error evaluating");
+          Logger.warning(5,"Error evaluating");
         }
-        Logger.information("evaluation done");
+        //Logger.information("evaluation done");
         if (result == null) {
           if (mode.equals("warn")) {
-            Logger.warning("no match");
+            Logger.warning(6,"No match");
+            dropRecords++;
           }
           else if (mode.equals("reject") && m_rejectLink != null) {
             RejectRecord rejRecord = m_rejectLink.getRejectRecord(inputRecord);
             rejRecord.setErrorText("No match");
             rejRecord.setErrorCode(2);
+            if (Logger.isDebugEnabled()) {
+            Logger.debug(96,"record rejected because no match");
+            }
             m_rejectLink.writeRecord(rejRecord);
+            rejectRecords++;
+          }
+          else {
+        	 dropRecords++;
           }
         }
         else {
@@ -207,7 +248,7 @@ public class jsonata extends Processor {
                   outputRecord.setValue(outputField, mapper.writeValueAsString(result.get(i)));
                 }
                 catch(JsonProcessingException e) {
-                  Logger.warning("error");
+                  Logger.warning(7,"Error processing json result set");
                 }
               }
               else {
@@ -226,18 +267,24 @@ public class jsonata extends Processor {
                 outputRecord.setValue(outputField, mapper.writeValueAsString(result));
               }
               catch(JsonProcessingException e) {
-                Logger.warning("error");
+            	  Logger.warning(8,"Error processing json result set");
               }
             }
             else {
               outputRecord.setValue(outputField, result.asText());
             }
             m_outputLink.writeRecord(outputRecord);
+            outputRecords++;
           }
 
         }
       }
     } while ( true );
+    
+    Logger.information(100,"Input records:"+inputRecords);
+    Logger.information(100,"Output records:"+outputRecords);
+    Logger.information(100,"Rejected records:"+rejectRecords);
+    Logger.information(100,"Droped records:"+dropRecords);
   }
 
   private void writeData(String fieldName, JsonNode data, OutputRecord outputRecord, ColumnMetadata OutputCol) {
@@ -245,7 +292,9 @@ public class jsonata extends Processor {
     String TargetType = "" + OutputCol.getType();
     int TargetLength = OutputCol.getPrecision();
     String SourceType = "" + data.getNodeType();
-    Logger.information(fieldName+":"+SourceType+"->"+TargetType);
+    if (Logger.isDebugEnabled()) {
+    Logger.debug(95,fieldName+":"+SourceType+"->"+TargetType);
+    }
     if (TargetType.equals("class java.lang.String")) {
       if (TargetLength > 0 && data.asText().length() > TargetLength) {
         Logger.warning(fieldName + " data truncation");
@@ -265,10 +314,10 @@ public class jsonata extends Processor {
       outputRecord.setValue(fieldName, data.doubleValue());
     }
     else if (TargetType.equals("class java.sql.Timestamp")) {
-    	Logger.warning("Timestamps are not yet handled");	
+    	Logger.warning(10,"Timestamps are not yet handled");	
 	 }
     else if (TargetType.equals("class java.sql.Date")) {
-    	Logger.warning("Dates are not yet handled");	
+    	Logger.warning(11,"Dates are not yet handled");	
 	}
     else {
       outputRecord.setValue(fieldName, data.asText());
