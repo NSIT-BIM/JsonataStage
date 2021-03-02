@@ -15,6 +15,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.time.*;
+import java.util.Date;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeParseException;
 
 
 //import java.math.BigInteger;
@@ -256,6 +260,7 @@ public class jsonata extends Processor {
               }
 
               m_outputLink.writeRecord(outputRecord);
+              outputRecords++;
             }
           } else {
             OutputRecord outputRecord = m_outputLink.getOutputRecord();
@@ -292,6 +297,10 @@ public class jsonata extends Processor {
     String TargetType = "" + OutputCol.getType();
     int TargetLength = OutputCol.getPrecision();
     String SourceType = "" + data.getNodeType();
+    if (!SourceType.equals("MISSING")) {
+    if (SourceType.equalsIgnoreCase("STRING") && ! TargetType.equals("class java.lang.String") && ! TargetType.equals("class java.sql.Timestamp") && ! TargetType.equals("class java.sql.Date")){
+    	Logger.warning(fieldName+" converting "+SourceType+" to "+TargetType);
+    }
     if (Logger.isDebugEnabled()) {
     Logger.debug(95,fieldName+":"+SourceType+"->"+TargetType);
     }
@@ -313,14 +322,28 @@ public class jsonata extends Processor {
     else if (TargetType.equals("class java.lang.Double")) {
       outputRecord.setValue(fieldName, data.doubleValue());
     }
-    else if (TargetType.equals("class java.sql.Timestamp")) {
-    	Logger.warning(10,"Timestamps are not yet handled");	
+    else if (TargetType.equals("class java.sql.Timestamp") || TargetType.equals("class java.sql.Date")) {
+    	try {
+	    	Date date = Date.from( Instant.parse( data.asText() ));
+	    	outputRecord.setValue(fieldName, date);
+    	}
+    	catch(DateTimeParseException e){
+    	    Logger.debug(94,"Could not convert "+data.asText()+" to UTC timestamp");
+    	    try  {
+    	    ZonedDateTime date2 = ZonedDateTime.parse(data.asText());
+    	    outputRecord.setValue(fieldName, Date.from(date2.toInstant()));
+    	    }
+    	    catch(DateTimeParseException e1){
+    	    	Logger.debug(94,"Could not convert "+data.asText()+" to zoned timestamp");
+    	    }
+    	}
 	 }
-    else if (TargetType.equals("class java.sql.Date")) {
-    	Logger.warning(11,"Dates are not yet handled");	
-	}
+   // else if (TargetType.equals("class java.sql.Date")) {
+   // 	Logger.warning(11,"Dates are not yet handled");	
+//	}
     else {
       outputRecord.setValue(fieldName, data.asText());
+    }
     }
     //outputRecord.setValue(fieldName, data.asText());
   }
