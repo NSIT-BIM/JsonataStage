@@ -14,7 +14,7 @@ This project is the implementation of this java library for usage in the Java Tr
 ## Installation
 
 1. You can either build from source with maven or ant, or download the packaged jar file with all the dependencies from here: https://gitlab.com/nsitbim/satellites/jsonataStage/-/packages.
-Or get the lastest release directly: [jsonata-1.0.0.jar](https://gitlab.com/nsitbim/satellites/jsonataStage/-/package_files/7330444/download)
+
 
 2. Copy the jar file on an accessible path on the engine server.
 
